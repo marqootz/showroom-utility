@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+# Bundled FFmpeg binaries (add them locally before building; see PACKAGING.md)
+extra/ffmpeg_macos/ffmpeg
+extra/ffmpeg_macos/ffprobe
+extra/ffmpeg_win/ffmpeg.exe
+extra/ffmpeg_win/ffprobe.exe
+build/
+dist/
