@@ -20,9 +20,9 @@ INPUT_HEIGHT = 3840
 PANEL_WIDTH = 2160
 PANEL_COUNT = 4
 
-# Final output size: 4 sections × 1080 wide, 1920 tall (one continuous video)
+# Output size: same aspect ratio as destination desktop (8640×3840) so it fills correctly
 OUTPUT_WIDTH = 4320
-OUTPUT_HEIGHT = 1920
+OUTPUT_HEIGHT = 1920  # 4320/1920 = 8640/3840 = 2.25
 
 # Two-pass encode settings (videowall-quality)
 ENCODE_PIX_FMT = "yuv422p10le"
@@ -266,7 +266,7 @@ def _run_ffmpeg_pass(
         "-i", str(input_path),
         "-filter_complex", filter_complex,
         "-map", "[v]",
-        "-s", f"{OUTPUT_WIDTH}x{OUTPUT_HEIGHT}",  # Force output 4320×1920
+        "-s", f"{OUTPUT_WIDTH}x{OUTPUT_HEIGHT}",
         "-c:v", "libx264",
         "-pix_fmt", ENCODE_PIX_FMT,
         "-preset", ENCODE_PRESET,
@@ -343,8 +343,8 @@ def run(
     progress_callback: Optional[callable] = None,
 ) -> Path:
     """
-    Run bezel removal: map input to 4 portrait panels, crop bezels, hstack, scale to 4320×1920, then two-pass H.264 encode.
-    Output is always 4320×1920 (4 horizontal sections of 1080×1920 each). Input layout is auto-detected:
+    Run bezel removal: map input to 4 portrait panels, crop bezels, hstack, scale to 4320×1920 (same aspect as destination 8640×3840), then two-pass H.264 encode.
+    Output fills 8640×3840 desktop correctly. Input layout is auto-detected:
     - Horizontal composite (width ≥ height, e.g. 8640×3840): 4 vertical strips → panels left to right.
     - Vertical stack (height > width, e.g. 3840×8640): 4 horizontal bands → rotate each 90° CCW → panels left to right.
     Portrait: top bezel = left edge of strip, bottom bezel = right edge (px).
