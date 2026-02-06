@@ -35,7 +35,7 @@ DEFAULT_TOP_BEZEL_PX = 16
 DEFAULT_BOTTOM_BEZEL_PX = 21
 WINDOW_MIN_WIDTH = 520
 # Min height: header (72) + main padding (48) + settings card (~220) + gap (10) + progress card (title + bar + status + result + log ~220)
-WINDOW_MIN_HEIGHT = 620
+WINDOW_MIN_HEIGHT = 850
 
 # Styling (Figma-to-HTML–style: dark header, light body, white cards, purple primary)
 COLOR_HEADER_BG = "#1A1A1A"
@@ -48,6 +48,7 @@ COLOR_SECONDARY_BG = "#E6E6E6"
 COLOR_SECONDARY_TEXT = "#333333"
 COLOR_TEXT_TITLE = "#000000"
 COLOR_TEXT_MUTED = "#666666"
+COLOR_INPUT_BG = "#F0F0F0"  # Match for entry fields and dropdown
 CARD_CORNER_RADIUS = 10
 CARD_PAD = 24
 
@@ -139,13 +140,29 @@ class BezelRemoverApp(ctk.CTk):
         self._browse_btn.grid(row=row, column=1, **pad_secondary)
         row += 1
 
+        # Divider above bezel section
+        div = ctk.CTkFrame(card, height=1, fg_color="#E0E0E0")
+        div.grid(row=row, column=0, columnspan=2, sticky="ew", padx=16, pady=(12, 4))
+        row += 1
+        ctk.CTkLabel(
+            card, text="Bezels", font=(CTK_FONT_FAMILY, 14, "bold"), text_color=COLOR_TEXT_TITLE
+        ).grid(row=row, column=0, columnspan=2, sticky="w", **pad_header)
+        row += 1
+        ctk.CTkLabel(
+            card,
+            text="Default values match the Bravia displays in the Showroom; leave unchanged unless needed.",
+            text_color="#CC0000",
+            font=(CTK_FONT_FAMILY, 12),
+        ).grid(row=row, column=0, columnspan=2, sticky="w", **pad_secondary)
+        row += 1
+
         # Top bezel (physical top = left edge in portrait row); no space between header and secondary
         ctk.CTkLabel(
-            card, text="Top bezel (px)", font=(CTK_FONT_FAMILY, 14, "bold"), text_color=COLOR_TEXT_TITLE
+            card, text="Top bezel (px)", font=(CTK_FONT_FAMILY, 12, "bold"), text_color=COLOR_TEXT_TITLE
         ).grid(row=row, column=0, sticky="w", **pad_header)
         self._top_bezel_var = ctk.StringVar(value=str(DEFAULT_TOP_BEZEL_PX))
         self._top_bezel_entry = ctk.CTkEntry(
-            card, textvariable=self._top_bezel_var, width=80, corner_radius=8, border_color="#E0E0E0"
+            card, textvariable=self._top_bezel_var, width=80, corner_radius=8, border_color="#E0E0E0", fg_color=COLOR_INPUT_BG
         )
         self._top_bezel_entry.grid(row=row, column=1, sticky="e", **pad_header)
         row += 1
@@ -159,17 +176,50 @@ class BezelRemoverApp(ctk.CTk):
 
         # Bottom bezel (physical bottom = right edge in portrait row); no space between header and secondary
         ctk.CTkLabel(
-            card, text="Bottom bezel (px)", font=(CTK_FONT_FAMILY, 14, "bold"), text_color=COLOR_TEXT_TITLE
+            card, text="Bottom bezel (px)", font=(CTK_FONT_FAMILY, 12, "bold"), text_color=COLOR_TEXT_TITLE
         ).grid(row=row, column=0, sticky="w", **pad_header)
         self._bottom_bezel_var = ctk.StringVar(value=str(DEFAULT_BOTTOM_BEZEL_PX))
         self._bottom_bezel_entry = ctk.CTkEntry(
-            card, textvariable=self._bottom_bezel_var, width=80, corner_radius=8, border_color="#E0E0E0"
+            card, textvariable=self._bottom_bezel_var, width=80, corner_radius=8, border_color="#E0E0E0", fg_color=COLOR_INPUT_BG
         )
         self._bottom_bezel_entry.grid(row=row, column=1, sticky="e", **pad_header)
         row += 1
         ctk.CTkLabel(
             card,
             text="Right edge of each panel (e.g. 21 for 21mm)",
+            text_color=COLOR_TEXT_MUTED,
+            font=(CTK_FONT_FAMILY, 12),
+        ).grid(row=row, column=0, columnspan=2, sticky="w", **pad_secondary)
+        row += 1
+
+        # Divider below bezel section
+        div2 = ctk.CTkFrame(card, height=1, fg_color="#E0E0E0")
+        div2.grid(row=row, column=0, columnspan=2, sticky="ew", padx=16, pady=(4, 12))
+        row += 1
+
+        # Target file size (quality vs size; longer videos get lower bitrate to stay under target)
+        ctk.CTkLabel(
+            card, text="Target file size", font=(CTK_FONT_FAMILY, 14, "bold"), text_color=COLOR_TEXT_TITLE
+        ).grid(row=row, column=0, sticky="w", **pad_header)
+        self._target_size_var = ctk.StringVar(value="200 MB")
+        self._target_size_menu = ctk.CTkOptionMenu(
+            card,
+            values=["100 MB", "200 MB", "500 MB", "Best quality"],
+            variable=self._target_size_var,
+            width=140,
+            corner_radius=8,
+            fg_color=COLOR_INPUT_BG,
+            dropdown_fg_color=COLOR_INPUT_BG,
+            button_color=COLOR_SECONDARY_BG,
+            button_hover_color="#D0D0D0",
+            text_color=COLOR_TEXT_TITLE,
+            dropdown_text_color=COLOR_TEXT_TITLE,
+        )
+        self._target_size_menu.grid(row=row, column=1, sticky="e", **pad_header)
+        row += 1
+        ctk.CTkLabel(
+            card,
+            text="Shorter videos get higher quality within the limit; Best quality uses fixed bitrate.",
             text_color=COLOR_TEXT_MUTED,
             font=(CTK_FONT_FAMILY, 12),
         ).grid(row=row, column=0, columnspan=2, sticky="w", **pad_secondary)
@@ -287,6 +337,16 @@ class BezelRemoverApp(ctk.CTk):
             self._status_var.set("Bezel values must be >= 0 and their sum < 1000.")
             return
 
+        target_size_mb = None
+        choice = self._target_size_var.get().strip()
+        if choice == "100 MB":
+            target_size_mb = 100.0
+        elif choice == "200 MB":
+            target_size_mb = 200.0
+        elif choice == "500 MB":
+            target_size_mb = 500.0
+        # "Best quality" -> None
+
         out = output_path(self.input_path)
         self._processing = True
         self._process_btn.configure(
@@ -320,6 +380,7 @@ class BezelRemoverApp(ctk.CTk):
                     output_path_arg=out,
                     top_bezel_px=top_bezel_px,
                     bottom_bezel_px=bottom_bezel_px,
+                    target_size_mb=target_size_mb,
                     ffmpeg_path=ffmpeg_path,
                     progress_callback=progress_callback,
                 )

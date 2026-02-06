@@ -30,9 +30,26 @@ ENCODE_PROFILE = "high422"
 ENCODE_LEVEL = "5.2"
 ENCODE_PRESET = "medium"
 ENCODE_BITRATE = "10000k"
+ENCODE_BITRATE_MIN_K = 1000
+ENCODE_BITRATE_MAX_K = 50000
 ENCODE_TUNE = "animation"
 AUDIO_BITRATE = "160k"
 AUDIO_CHANNELS = 2
+
+
+def video_bitrate_for_target_size_mb(target_size_mb: float, duration_sec: float) -> str:
+    """
+    Compute video bitrate (e.g. "5000k") so total file size stays at or under target_size_mb,
+    given duration_sec. Reserves space for audio (160 kbps). Clamped to ENCODE_BITRATE_MIN/MAX.
+    """
+    if duration_sec <= 0:
+        return ENCODE_BITRATE
+    target_bits = target_size_mb * 8 * 1024 * 1024
+    audio_bits = 160 * 1000 * duration_sec  # 160 kbps
+    video_bps = (target_bits - audio_bits) / duration_sec
+    video_kbps = int(round(video_bps / 1000))
+    video_kbps = max(ENCODE_BITRATE_MIN_K, min(ENCODE_BITRATE_MAX_K, video_kbps))
+    return f"{video_kbps}k"
 
 
 def find_ffmpeg() -> Optional[str]:
@@ -258,8 +275,10 @@ def _run_ffmpeg_pass(
     pass_weight: float = 1.0,
     pass_offset: float = 0.0,
     passlogfile_prefix: Optional[str] = None,
+    video_bitrate: Optional[str] = None,
 ) -> None:
-    """Run one FFmpeg pass (1 or 2). pass_weight is fraction of total progress (e.g. 0.5); pass_offset is start % (e.g. 0 or 50)."""
+    """Run one FFmpeg pass (1 or 2). video_bitrate overrides ENCODE_BITRATE when set (e.g. from target file size)."""
+    b_v = video_bitrate if video_bitrate else ENCODE_BITRATE
     common = [
         ffmpeg,
         "-y",
@@ -273,7 +292,7 @@ def _run_ffmpeg_pass(
         "-profile:v", ENCODE_PROFILE,
         "-level", ENCODE_LEVEL,
         "-tune", ENCODE_TUNE,
-        "-b:v", ENCODE_BITRATE,
+        "-b:v", b_v,
         "-pass", str(pass_num),
         "-progress", "pipe:1",
         "-nostats",
@@ -339,11 +358,13 @@ def run(
     output_path_arg: Optional[Union[str, Path]] = None,
     top_bezel_px: int = 16,
     bottom_bezel_px: int = 21,
+    target_size_mb: Optional[float] = None,
     ffmpeg_path: Optional[str] = None,
     progress_callback: Optional[callable] = None,
 ) -> Path:
     """
     Run bezel removal: map input to 4 portrait panels, crop bezels, hstack, scale to 4320×1920 (same aspect as destination 8640×3840), then two-pass H.264 encode.
+    If target_size_mb is set (e.g. 200), video bitrate is chosen so the output file stays at or under that size.
     Output fills 8640×3840 desktop correctly. Input layout is auto-detected:
     - Horizontal composite (width ≥ height, e.g. 8640×3840): 4 vertical strips → panels left to right.
     - Vertical stack (height > width, e.g. 3840×8640): 4 horizontal bands → rotate each 90° CCW → panels left to right.
@@ -385,6 +406,11 @@ def run(
 
     duration_sec = get_duration_seconds(input_path, ffprobe_path=ffprobe_path)
 
+    # Video bitrate: from target file size (if set) or default
+    video_bitrate: Optional[str] = None
+    if target_size_mb is not None and target_size_mb > 0 and duration_sec and duration_sec > 0:
+        video_bitrate = video_bitrate_for_target_size_mb(target_size_mb, duration_sec)
+
     # Two-pass encode: shared passlogfile in output dir (cleaned up after)
     passlog_prefix = str(out.parent / (out.stem + "_2pass"))
 
@@ -404,6 +430,7 @@ def run(
         pass_weight=0.5,
         pass_offset=0.0,
         passlogfile_prefix=passlog_prefix,
+        video_bitrate=video_bitrate,
     )
 
     if progress_callback:
@@ -421,6 +448,7 @@ def run(
             pass_weight=0.5,
             pass_offset=50.0,
             passlogfile_prefix=passlog_prefix,
+            video_bitrate=video_bitrate,
         )
     finally:
         # Remove two-pass log files
